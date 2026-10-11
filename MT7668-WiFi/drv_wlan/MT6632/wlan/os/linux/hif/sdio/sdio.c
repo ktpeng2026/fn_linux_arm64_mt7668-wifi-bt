@@ -1462,6 +1462,9 @@ BOOL kalDevWriteData(IN P_GLUE_INFO_T prGlueInfo, IN P_MSDU_INFO_T prMsduInfo)
 	UINT_8 *pucBuf;
 	UINT_32 u4Length;
 	UINT_8 ucTC;
+	UINT_32 u4DirectBufSize;
+	PUINT_8 pucDirectBuf;
+	BOOL fgWriteSuccess;
 
 	SDIO_TIME_INTERVAL_DEC();
 
@@ -1472,6 +1475,43 @@ BOOL kalDevWriteData(IN P_GLUE_INFO_T prGlueInfo, IN P_MSDU_INFO_T prMsduInfo)
 
 	prTxCtrl = &prAdapter->rTxCtrl;
 	pucOutputBuf = prTxCtrl->pucTxCoalescingBufPtr;
+
+	if (ALIGN_4(u4Length) > prAdapter->u4CoalescingBufCachedSize) {
+		if (prTxCtrl->u4WrIdx)
+			kalDevKickData(prGlueInfo);
+
+#if (MTK_WCN_HIF_SDIO == 0)
+		u4DirectBufSize = ALIGN(u4Length, prHifInfo->func->cur_blksize);
+#else
+		u4DirectBufSize = ALIGN_4(u4Length);
+#endif
+		pucDirectBuf = kzalloc(u4DirectBufSize, GFP_KERNEL);
+		if (!pucDirectBuf) {
+			DBGLOG(HAL, ERROR,
+			       "Unable to allocate %u-byte direct TX buffer\n",
+			       u4DirectBufSize);
+			return FALSE;
+		}
+
+		memcpy(pucDirectBuf, pucBuf, u4Length);
+		fgWriteSuccess = kalDevPortWrite(prGlueInfo, MCR_WTDR1,
+						u4Length, pucDirectBuf,
+						u4DirectBufSize);
+		kfree(pucDirectBuf);
+
+		if (!fgWriteSuccess) {
+			HAL_SET_FLAG(prAdapter, ADAPTER_FLAG_HW_ERR);
+			fgIsBusAccessFailed = TRUE;
+		}
+
+		if (!prMsduInfo->pfTxDoneHandler)
+			kalFreeTxMsdu(prAdapter, prMsduInfo);
+
+		prHifInfo->au4PendingTxDoneCount[ucTC]++;
+		prHifInfo->rStatCounter.u4DataPortWriteCnt++;
+		prHifInfo->rStatCounter.u4DataPktWriteCnt++;
+		return fgWriteSuccess;
+	}
 
 	if (prTxCtrl->u4WrIdx + ALIGN_4(u4Length) > prAdapter->u4CoalescingBufCachedSize) {
 		if ((prAdapter->u4CoalescingBufCachedSize - ALIGN_4(prTxCtrl->u4WrIdx)) >= HIF_TX_TERMINATOR_LEN) {
