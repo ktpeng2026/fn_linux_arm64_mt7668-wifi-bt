@@ -3056,6 +3056,7 @@ WLAN_STATUS wlanImageSectionDownload(IN P_ADAPTER_T prAdapter, IN UINT_32 u4ImgS
 {
 	P_CMD_INFO_T prCmdInfo;
 	P_INIT_HIF_TX_HEADER_T prInitHifTxHeader;
+	PUINT_8 pucDownloadBuf;
 	WLAN_STATUS u4Status = WLAN_STATUS_SUCCESS;
 
 	ASSERT(prAdapter);
@@ -3088,7 +3089,8 @@ WLAN_STATUS wlanImageSectionDownload(IN P_ADAPTER_T prAdapter, IN UINT_32 u4ImgS
 	prInitHifTxHeader->rInitWifiCmd.ucSeqNum = 0;
 
 	/* 3. Setup DOWNLOAD_BUF */
-	kalMemCopy(prInitHifTxHeader->rInitWifiCmd.aucBuffer, pucImgSecBuf, u4ImgSecSize);
+	pucDownloadBuf = (PUINT_8)prInitHifTxHeader + sizeof(*prInitHifTxHeader);
+	kalMemCopy(pucDownloadBuf, pucImgSecBuf, u4ImgSecSize);
 
 	/* 4. Send FW_Download command */
 	if (nicTxInitCmd(prAdapter, prCmdInfo) != WLAN_STATUS_SUCCESS) {

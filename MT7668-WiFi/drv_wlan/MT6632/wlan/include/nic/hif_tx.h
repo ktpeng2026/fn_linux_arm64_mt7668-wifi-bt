@@ -87,7 +87,7 @@
 
 #define CMD_HDR_SIZE                        sizeof(WIFI_CMD_T)
 
-#define CMD_PKT_SIZE_FOR_IMAGE              2048	/* !< 2048 Bytes CMD payload buffer */
+#define CMD_PKT_SIZE_FOR_IMAGE              1984	/* 2048-byte SDIO request minus 64-byte init header */
 
 /*! NIC_HIF_TX_HEADER_T (for short-header format) */
 /* DW 0, Byte 0,1 */

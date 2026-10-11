@@ -2286,12 +2286,17 @@ WLAN_STATUS nicTxInitCmd(IN P_ADAPTER_T prAdapter, IN P_CMD_INFO_T prCmdInfo)
 	prTxCtrl = &prAdapter->rTxCtrl;
 	pucOutputBuf = prTxCtrl->pucTxCoalescingBufPtr;
 	u2OverallBufferLength = TFCB_FRAME_PAD_TO_DW((prCmdInfo->u2InfoBufLen) & (UINT_16)
-						     HIF_TX_HDR_TX_BYTE_COUNT_MASK);
+							     HIF_TX_HDR_TX_BYTE_COUNT_MASK);
+	if (u2OverallBufferLength > prAdapter->u4CoalescingBufCachedSize) {
+		DBGLOG(INIT, ERROR,
+		       "Init command length %u exceeds coalescing buffer %u\n",
+		       u2OverallBufferLength,
+		       prAdapter->u4CoalescingBufCachedSize);
+		return WLAN_STATUS_FAILURE;
+	}
 
 	/* <1> Copy CMD Header to command buffer (by using pucCoalescingBufCached) */
 	kalMemCopy((PVOID)&pucOutputBuf[0], (PVOID) prCmdInfo->pucInfoBuffer, prCmdInfo->u2InfoBufLen);
-
-	ASSERT(u2OverallBufferLength <= prAdapter->u4CoalescingBufCachedSize);
 
 	/* <2> Write frame to data port */
 	HAL_WRITE_TX_PORT(prAdapter, NIC_TX_INIT_CMD_PORT,
