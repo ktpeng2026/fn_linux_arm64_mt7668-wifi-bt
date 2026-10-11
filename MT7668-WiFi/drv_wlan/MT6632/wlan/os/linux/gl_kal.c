@@ -596,7 +596,7 @@ VOID kalUpdateMACAddress(IN P_GLUE_INFO_T prGlueInfo, IN PUINT_8 pucMacAddr)
 	ASSERT(pucMacAddr);
 
 	if (UNEQUAL_MAC_ADDR(prGlueInfo->prDevHandler->dev_addr, pucMacAddr))
-		memcpy(prGlueInfo->prDevHandler->dev_addr, pucMacAddr, PARAM_MAC_ADDR_LEN);
+		eth_hw_addr_set(prGlueInfo->prDevHandler, pucMacAddr);
 
 }
 
@@ -4694,7 +4694,9 @@ kalSetNetAddress(IN P_GLUE_INFO_T prGlueInfo,
 	for (i = 0; i < u4NumIPv4Addr; i++) {
 		prParamNetAddr->u2AddressType = PARAM_PROTOCOL_ID_TCP_IP;
 		prParamNetAddr->u2AddressLength = u4AddrLen;
-		kalMemCopy(prParamNetAddr->aucAddress, &pucIPv4Addr[i * u4AddrLen], u4AddrLen);
+		kalMemCopy((PUINT_8) prParamNetAddr +
+			OFFSET_OF(PARAM_NETWORK_ADDRESS, aucAddress),
+			&pucIPv4Addr[i * u4AddrLen], u4AddrLen);
 
 		prParamNetAddr = (P_PARAM_NETWORK_ADDRESS) ((ULONG) prParamNetAddr +
 							    (ULONG) (u4AddrLen +
@@ -4707,7 +4709,9 @@ kalSetNetAddress(IN P_GLUE_INFO_T prGlueInfo,
 	for (i = 0; i < u4NumIPv6Addr; i++) {
 		prParamNetAddr->u2AddressType = PARAM_PROTOCOL_ID_TCP_IP;
 		prParamNetAddr->u2AddressLength = u4AddrLen;
-		kalMemCopy(prParamNetAddr->aucAddress, &pucIPv6Addr[i * u4AddrLen], u4AddrLen);
+		kalMemCopy((PUINT_8) prParamNetAddr +
+			OFFSET_OF(PARAM_NETWORK_ADDRESS, aucAddress),
+			&pucIPv6Addr[i * u4AddrLen], u4AddrLen);
 
 		prParamNetAddr = (P_PARAM_NETWORK_ADDRESS) ((ULONG) prParamNetAddr +
 							    (ULONG) (u4AddrLen +

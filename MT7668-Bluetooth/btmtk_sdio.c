@@ -592,32 +592,6 @@ static int btmtk_sdio_writel(u32 offset, u32 val)
 	return ret;
 }
 
-static int btmtk_sdio_write_own_cmd52(int owntype, u8 *status)
-{
-	int ret = 0;
-	u8 value;
-
-	if (!g_card || !g_card->func)
-		return -EIO;
-
-	value = owntype == DRIVER_OWN ? BIT(1) : BIT(0);
-
-	sdio_claim_host(g_card->func);
-	sdio_writeb(g_card->func, value, CHLPCR_BYTE1, &ret);
-	if (!ret && status)
-		*status = sdio_readb(g_card->func, CHLPCR_BYTE1, &ret);
-	sdio_release_host(g_card->func);
-
-	if (ret)
-		pr_err("%s CMD52 failed type=%d addr=0x%x ret=%d\n",
-		       __func__, owntype, CHLPCR_BYTE1, ret);
-	else if (status)
-		pr_info("%s type=%d CHLPCR_BYTE1=0x%02x\n",
-			__func__, owntype, *status);
-
-	return ret;
-}
-
 static int btmtk_sdio_readl(u32 offset,  u32 *val)
 {
 	u32 ret = 0;
@@ -649,7 +623,6 @@ static int btmtk_sdio_set_own_back(int owntype)
 	u32 u32ReadCRValue = 0;
 	u32 ownValue = 0;
 	u32 set_checkretry = 30;
-	u8 cmd52Status = 0;
 
 	pr_debug("%s owntype %d\n", __func__, owntype);
 
@@ -688,13 +661,7 @@ setretry:
 		ownValue = 0x00000100;
 
 	pr_debug("%s write CHLPCR 0x%x\n", __func__, ownValue);
-	ret = btmtk_sdio_write_own_cmd52(owntype, &cmd52Status);
-	if (ret || (owntype == DRIVER_OWN && !(cmd52Status & BIT(0))) ||
-	    (owntype == FW_OWN && (cmd52Status & BIT(0)))) {
-		pr_warn("%s CMD52 own request incomplete, fallback to CMD53\n",
-			__func__);
-		ret = btmtk_sdio_writel(CHLPCR, ownValue);
-	}
+	ret = btmtk_sdio_writel(CHLPCR, ownValue);
 	if (ret) {
 		ret = -EIO;
 		goto done;
@@ -2176,8 +2143,10 @@ static int btmtk_sdio_card_to_host(struct btmtk_private *priv, const u8 *event, 
 	u32 dump_len = 0;
 	char *core_dump_end = NULL;
 	int i = 0;
+	bool forward_to_hci = true;
 	u8 reset_event[] =  {0x0E, 0x04, 0x01, 0x03, 0x0C, 0x00};
 	static int print_dump_data_counter;
+	static bool drop_pinmux_complete = true;
 
 #if SUPPORT_FW_DUMP
 	fw_is_coredump_end_packet = false;
@@ -2402,6 +2371,29 @@ FW_DONE:
 		break;
 	case HCI_EVENT_PKT:
 		buf_len = skb->data[1] + 2;
+		/*
+		 * MT7668 firmware advertises HCI_OP_LE_SET_DEFAULT_PHY in the
+		 * Read Local Supported Commands response, but rejects the command
+		 * with Unknown HCI Command.  Linux 6.18 therefore aborts HCI device
+		 * initialization with -EBADRQC.  Correct the firmware capability
+		 * bitmap before passing the event to the Bluetooth core.
+		 */
+		if (buf_len >= 70 && skb->data[0] == HCI_EV_CMD_COMPLETE &&
+		    skb->data[3] == (HCI_OP_READ_LOCAL_COMMANDS & 0xff) &&
+		    skb->data[4] == (HCI_OP_READ_LOCAL_COMMANDS >> 8) &&
+		    skb->data[5] == 0x00 && (skb->data[41] & 0x20)) {
+			skb->data[41] &= ~0x20;
+			pr_info("%s: disabled unsupported LE Set Default PHY command\n",
+				__func__);
+		}
+		if (drop_pinmux_complete && buf_len >= 6 &&
+		    skb->data[0] == HCI_EV_CMD_COMPLETE &&
+		    skb->data[3] == 0xd1 && skb->data[4] == 0xfc) {
+			drop_pinmux_complete = false;
+			forward_to_hci = false;
+			pr_debug("%s: dropped delayed pinmux command complete\n",
+				 __func__);
+		}
 		break;
 	default:
 		BTSDIO_INFO_RAW(skb->data, (buf_len < 16 ? buf_len : 16), "%s: skb->data(type %d):", __func__, type);
@@ -2477,9 +2469,13 @@ FW_DONE:
 			hci_skb_pkt_type(skb_hci) = type;
 #endif
 
-			ret = hci_recv_frame(hdev, skb_hci);
-			if (ret < 0)
-				printk(KERN_ERR "XXX: error recv frame: %d\n", ret);
+			if (forward_to_hci) {
+				ret = hci_recv_frame(hdev, skb_hci);
+				if (ret < 0)
+					printk(KERN_ERR "XXX: error recv frame: %d\n", ret);
+			} else {
+				kfree_skb(skb_hci);
+			}
 			}
 
 		fops_skb->len = buf_len;

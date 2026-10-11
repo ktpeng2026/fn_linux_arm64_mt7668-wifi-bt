@@ -943,7 +943,7 @@ typedef struct _WIFI_CMD_T {
 	UINT_8 ucReserved2[3];
 	UINT_32 au4Reserved3[4];	/* padding fields */
 #endif
-	UINT_8 aucBuffer[0];
+	UINT_8 aucBuffer[];
 } WIFI_CMD_T, *P_WIFI_CMD_T;
 
 /* for Command Packet (via HIF-TX) */
@@ -1804,7 +1804,7 @@ typedef struct _CMD_SET_COUNTRY_CHANNEL_POWER_LIMIT_V2_T {
 	UINT_8 eband; /*ENUM_BAND_T*/
 	UINT_8 usReserved[2];
 	UINT_32 countryCode;
-	CMD_CHANNEL_POWER_LIMIT_V2 rChannelPowerLimit[0];
+	CMD_CHANNEL_POWER_LIMIT_V2 rChannelPowerLimit[];
 } CMD_SET_COUNTRY_CHANNEL_POWER_LIMIT_V2_T, *P_CMD_SET_COUNTRY_CHANNEL_POWER_LIMIT_V2_T;
 
 #define TX_PWR_LIMIT_SECTION_NUM 5

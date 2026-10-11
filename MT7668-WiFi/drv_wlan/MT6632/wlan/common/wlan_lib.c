@@ -6687,7 +6687,7 @@ VOID wlanInitFeatureOption(IN P_ADAPTER_T prAdapter)
 	prWifiVar->ucStaUapsd = (UINT_8) wlanCfgGetUint32(prAdapter, "StaUapsd", FEATURE_DISABLED);
 	prWifiVar->ucApUapsd = (UINT_8) wlanCfgGetUint32(prAdapter, "ApUapsd", FEATURE_DISABLED);
 	prWifiVar->ucP2pUapsd = (UINT_8) wlanCfgGetUint32(prAdapter, "P2pUapsd", FEATURE_ENABLED);
-	prWifiVar->u4RegP2pIfAtProbe = (UINT_8) wlanCfgGetUint32(prAdapter, "RegP2pIfAtProbe", FEATURE_DISABLED);
+	prWifiVar->u4RegP2pIfAtProbe = FEATURE_DISABLED;
 	prWifiVar->ucP2pShareMacAddr = (UINT_8) wlanCfgGetUint32(prAdapter, "P2pShareMacAddr", FEATURE_DISABLED);
 
 	prWifiVar->ucTxShortGI = (UINT_8) wlanCfgGetUint32(prAdapter, "SgiTx", FEATURE_ENABLED);
