@@ -9,7 +9,7 @@
 
 ## 发布文件
 
-`output/mt7668-6.18.18-arm64/` 包含两个 KO、`firmware/`、安装与卸载脚本，以及 `meson-g12a-x96-max_spdif_mt7668.dtb`。只需将整个发布目录复制到目标机；目标机无需源码或内核头文件。源码固件主要位于 `MT7668-WiFi/7668_firmware/`，部署时以发布目录内的固件为准。
+`releases/6.18.18.c1151-trim/aarch64/` 包含两个 KO、`firmware/`、安装与卸载脚本，以及顶层的 `meson-g12a-x96-max_spdif_mt7668.dtb`。只需将整个版本目录复制到目标机；目标机无需源码或内核头文件。源码固件主要位于 `MT7668-WiFi/7668_firmware/`，部署时以版本目录内的固件为准。**已归档版本无需重新编译**。
 
 **先核实目标机** `uname -r` 为 `6.18.18.c1151-trim`。KO 的 `vermagic` 必须与正在运行的内核匹配；同为 6.18.18 的其他内核构建不一定兼容。
 
@@ -69,24 +69,26 @@ modinfo -F vermagic MT7668-Bluetooth/bt_mt7668.ko
 
 若自行准备目标内核的构建目录，可补装 `bc bison flex libssl-dev libelf-dev`；这些是内核准备/构建工具，不是已准备好的外置模块在所有环境下都必须安装的依赖。Ubuntu 软件源中的交叉编译器版本未必与目标内核构建时的 GCC 版本一致。
 
-确认输出为目标内核的 `6.18.18.c1151-trim SMP preempt mod_unload aarch64` 后，将两个新 KO 复制到发布目录；否则安装脚本会因版本不匹配而退出：
+确认输出为目标内核的 `6.18.18.c1151-trim SMP preempt mod_unload aarch64` 后，可用脚本完成编译、检查 `vermagic` 和归档：
 
 ```sh
-cp MT7668-WiFi/drv_wlan/MT6632/wlan/wlan_mt76x8_sdio.ko \
-    output/mt7668-6.18.18-arm64/
-cp MT7668-Bluetooth/bt_mt7668.ko output/mt7668-6.18.18-arm64/
+KERNEL_RELEASE=6.18.18.c1151-trim \
+KDIR="$PWD/linux-headers-6.18.18.c1151-trim" \
+./tools/build_release.sh
 ```
 
-目标内核使用 GCC 12.2 构建、本机使用 GCC 13.3 时，编译会提示 compiler differs；编译成功本身不代表运行时 ABI 完全兼容，须在目标机验证。
+如果已经单独完成编译，也可以把这两个新 KO 手工复制到相应的 `releases/<uname -r>/aarch64/`。构建脚本以 `KERNEL_RELEASE` 和 `KDIR` 为目标，使用 `CROSS_COMPILE=aarch64-linux-gnu-`（ARM64 本机编译时设 `CROSS_COMPILE=`），同步固件和安装脚本；**不会自动生成或覆盖 DTB**。不同内核必须分别编译并归档，不能仅重命名旧目录。目标内核使用 GCC 12.2 构建、本机使用 GCC 13.3 时，编译会提示 compiler differs；编译成功本身不代表运行时 ABI 完全兼容，须在目标机验证。
 
 ## 安装
 
-将完整的 `output/mt7668-6.18.18-arm64/` 复制到目标机（包括 `firmware/` 和脚本），然后在目标机执行：
+将完整的 `releases/6.18.18.c1151-trim/aarch64/` 复制到目标机（包括 `firmware/` 和脚本），然后在目标机执行，不需要重新构建：
 
 ```sh
-cd /mt7668-6.18.18-arm64
+cd /mt7668/6.18.18.c1151-trim/aarch64
 sudo ./install_mt7668.sh
 ```
+
+若从仓库根目录执行 `sudo ./install_mt7668.sh`，脚本会查找 `releases/$(uname -r)/aarch64/`；直接在发布目录运行则使用当前目录。也可用 `sudo PAYLOAD_DIR=/绝对路径/版本目录 ./install_mt7668.sh` 明确指定。根目录和归档目录均保存安装脚本，更新脚本后运行 `./tools/build_release.sh` 同步到发布目录；不需要更新 KO 时，可直接复制根目录两份脚本到相应版本目录。
 
 脚本会检查 KO 的 `vermagic`，安装模块到 `/lib/modules/$(uname -r)/extra/mt7668/`，复制固件到 `/lib/firmware/`，运行 `depmod`，配置开机加载，屏蔽冲突的内核自带 `btmtksdio`，并尝试启用 `bluetooth.service`。当前仅屏蔽 `btmtksdio`，**不屏蔽** `btmtk`。
 

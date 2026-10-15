@@ -9,7 +9,7 @@ elif [ -f "$SCRIPT_DIR/wlan_mt76x8_sdio.ko" ] &&
 	[ -f "$SCRIPT_DIR/bt_mt7668.ko" ]; then
 	PAYLOAD_DIR=$SCRIPT_DIR
 else
-	PAYLOAD_DIR="$SCRIPT_DIR/output/mt7668-6.18.18-arm64"
+	PAYLOAD_DIR="$SCRIPT_DIR/releases/$KERNEL_RELEASE/aarch64"
 fi
 MODULE_DIR="/lib/modules/$KERNEL_RELEASE/extra/mt7668"
 
@@ -27,6 +27,11 @@ done
 
 if [ ! -d "$PAYLOAD_DIR/firmware" ]; then
 	echo "缺少固件目录: $PAYLOAD_DIR/firmware" >&2
+	exit 1
+fi
+
+if [ ! -f "$PAYLOAD_DIR/meson-g12a-x96-max_spdif_mt7668.dtb" ]; then
+	echo "缺少人工安装所需的 DTB: $PAYLOAD_DIR/meson-g12a-x96-max_spdif_mt7668.dtb" >&2
 	exit 1
 fi
 
@@ -53,6 +58,7 @@ done
 
 find "$PAYLOAD_DIR/firmware" -type f -print | while IFS= read -r firmware; do
 	relative=${firmware#"$PAYLOAD_DIR/firmware"}
+	case "$relative" in *.dtb) continue ;; esac
 	install -m 0644 "$firmware" "/lib/firmware$relative"
 done
 
