@@ -129,6 +129,63 @@ else
 	printf 'MacAddr %s\n' "$WIFI_MAC" >> /lib/firmware/wifi.cfg
 fi
 
+BT_MAC_FILE=/etc/mt7668-bt-mac
+BT_EEPROM=/lib/firmware/EEPROM_MT7668.bin
+if [ -n "${MT7668_BT_MAC:-}" ]; then
+	BT_MAC=$MT7668_BT_MAC
+elif [ -s "$BT_MAC_FILE" ]; then
+	BT_MAC=$(tr -d '[:space:]' < "$BT_MAC_FILE")
+else
+	BT_NONCE=0
+	while :; do
+		BT_HASH=$(printf 'mt7668-bt:%s:%s' "$WIFI_MAC" "$BT_NONCE" | sha256sum | awk '{print $1}')
+		BT_MAC=$(printf '06:%s:%s:%s:%s:%s' \
+			"$(printf '%s' "$BT_HASH" | cut -c1-2)" \
+			"$(printf '%s' "$BT_HASH" | cut -c3-4)" \
+			"$(printf '%s' "$BT_HASH" | cut -c5-6)" \
+			"$(printf '%s' "$BT_HASH" | cut -c7-8)" \
+			"$(printf '%s' "$BT_HASH" | cut -c9-10)")
+		case "$BT_MAC" in
+			*00*) BT_NONCE=$((BT_NONCE + 1)) ;;
+			*) break ;;
+		esac
+	done
+fi
+
+if ! printf '%s\n' "$BT_MAC" | grep -Eiq '^([0-9a-f]{2}:){5}[0-9a-f]{2}$'; then
+	echo "无效的蓝牙地址: $BT_MAC" >&2
+	exit 1
+fi
+
+OLD_IFS=$IFS
+IFS=:
+set -- $BT_MAC
+IFS=$OLD_IFS
+if [ $((0x$1 & 1)) -ne 0 ] ||
+	[ "$(printf '%s' "$BT_MAC" | tr '[:upper:]' '[:lower:]')" =
+	  "$(printf '%s' "$WIFI_MAC" | tr '[:upper:]' '[:lower:]')" ]; then
+	echo "蓝牙地址必须为单播，且不能与 Wi-Fi MAC 相同: $BT_MAC" >&2
+	exit 1
+fi
+for octet do
+	if [ "$octet" = 00 ]; then
+		echo "蓝牙地址不可包含 00：驱动会将其随机化: $BT_MAC" >&2
+		exit 1
+	fi
+done
+
+if [ ! -f "$BT_EEPROM" ] || [ "$(wc -c < "$BT_EEPROM")" -lt 906 ]; then
+	echo "缺少有效的蓝牙 EEPROM: $BT_EEPROM" >&2
+	exit 1
+fi
+
+BT_BYTES=$(printf '\\%03o\\%03o\\%03o\\%03o\\%03o\\%03o' \
+	"$((0x$6))" "$((0x$5))" "$((0x$4))" \
+	"$((0x$3))" "$((0x$2))" "$((0x$1))")
+printf '%b' "$BT_BYTES" | dd of="$BT_EEPROM" bs=1 seek=900 conv=notrunc status=none
+printf '%s\n' "$BT_MAC" > "$BT_MAC_FILE"
+chmod 0600 "$BT_MAC_FILE"
+
 cat > /etc/modules-load.d/mt7668.conf <<'EOF'
 wlan_mt76x8_sdio
 bt_mt7668
@@ -143,6 +200,7 @@ fi
 echo "MT7668 驱动安装完成。"
 echo "模块目录: $MODULE_DIR"
 echo "Wi-Fi MAC: $WIFI_MAC"
+echo "蓝牙地址: $BT_MAC"
 echo ""
 echo "重要：DTB 不会由脚本自动替换。"
 echo "请人工把 $PAYLOAD_DIR/meson-g12a-x96-max_spdif_mt7668.dtb"

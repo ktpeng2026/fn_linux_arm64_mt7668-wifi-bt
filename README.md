@@ -112,6 +112,23 @@ grep -E '^(MacOverride|MacAddr) ' /lib/firmware/wifi.cfg
 cat /sys/class/net/wlan0/address
 ```
 
+### 每台设备的蓝牙地址
+
+蓝牙驱动从 `/lib/firmware/EEPROM_MT7668.bin` 的 `0x384` 偏移读取地址；发布目录的 EEPROM 是相同的模板，**不可直接在多台设备上共用其默认蓝牙地址**。安装脚本会从每台设备的 Wi-Fi MAC 派生不同的本地管理蓝牙地址，保存至 `/etc/mt7668-bt-mac`，并只修改目标机的 EEPROM 副本；重新安装保持地址不变。已有逐台分配的蓝牙地址可显式指定：
+
+```sh
+sudo MT7668_BT_MAC=06:11:22:33:44:55 ./install_mt7668.sh
+```
+
+蓝牙地址须为单播、不能包含 `00` 字节（旧驱动遇到 `00` 会临时随机化），也不能与 Wi-Fi MAC 相同。若两台系统镜像和 Wi-Fi MAC 相同，派生的蓝牙地址也会相同：请逐台显式指定地址。重启后检查：
+
+```sh
+cat /etc/mt7668-bt-mac
+hciconfig hci0 -a | grep 'BD Address'
+```
+
+脚本不会改变仓库归档中的公共 EEPROM 模板，卸载时保留目标机的蓝牙地址文件与固件副本。
+
 ## 重启后验证
 
 ```sh
