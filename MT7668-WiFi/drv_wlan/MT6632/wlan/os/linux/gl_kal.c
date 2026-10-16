@@ -756,6 +756,14 @@ kalProcessRxPacket(IN P_GLUE_INFO_T prGlueInfo, IN PVOID pvPacket, IN PUINT_8 pu
 {
 	WLAN_STATUS rStatus = WLAN_STATUS_SUCCESS;
 	struct sk_buff *skb = (struct sk_buff *)pvPacket;
+	unsigned char *end = skb_end_pointer(skb);
+
+	if (pucPacketStart < skb->head || pucPacketStart > end ||
+	    u4PacketLen > end - pucPacketStart) {
+		pr_warn_ratelimited("wlan: invalid RX buffer start=%px length=%u capacity=%zu\n",
+				    pucPacketStart, u4PacketLen, end - skb->head);
+		return WLAN_STATUS_FAILURE;
+	}
 
 	skb->data = (unsigned char *)pucPacketStart;
 
